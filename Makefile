@@ -9,7 +9,6 @@ reset:			## resets the config files
 	@echo "[\033[36mINFO\033[0m] Resetting config files..."
 	rm -rf ./config
 	mkdir ./config
-	find ./tests -type f -name "config_*.bin" -exec cp -r -t ./config {} +
 
 clean:			## cleans up project folder
 	@echo "[\033[36mINFO\033[0m] Cleaning up folder..."
