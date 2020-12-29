@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // a3.c
 //
-// TODO
+// Pipe-minigame, rotate the pipes to reach the goal
 //
 // Group: 9
 //
@@ -18,13 +18,20 @@
 #define COMMANDLINE_PARAMETER 1
 
 #define SIZE_MAGIC_NUMBER 7
+#define SIZE_FIELD_WIDTH 1
+#define SIZE_FIELD_HEIGHT 1
+#define SIZE_ROW_START 1
+#define SIZE_COLUMN_START 1
+#define SIZE_ROW_END 1
+#define SIZE_COLUMN_END 1
+#define SIZE_HIGHSCORE_ENTRIES 1
+
+#define SIZE_HIGHSCORE_ENTRY_POINTS 1
+#define SIZE_HIGHSCORE_ENTRY_NAME 3
 
 //strings
 #define MAGIC_NUMBER "ESPipes"
 
-//char
-
-//enum
 typedef enum _Direction_
 {
   TOP = 0,
@@ -33,7 +40,12 @@ typedef enum _Direction_
   RIGHT = 3
 } Direction;
 
-// TODO Highscore Datentyp
+typedef struct _Highscore_
+{
+  char **name;
+  unsigned int *score;
+} Highscore;
+
 
 // forward declarations
 bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
@@ -58,7 +70,8 @@ int main(int argc, char *argv[])
   if (--argc == COMMANDLINE_PARAMETER)
   {
     char *path = argv[1];
-    if (checkConfigFile(path)) {
+    if (checkConfigFile(path))
+    {
       printf("Valid Config");
     }
   }
@@ -76,9 +89,11 @@ bool checkConfigFile(char *path)
   if (fp)
   {
     char *magic_number = malloc(sizeof(char) * SIZE_MAGIC_NUMBER);
-    if (magic_number) {
+    if (magic_number)
+    {
       fread(magic_number, sizeof(char), SIZE_MAGIC_NUMBER, fp);
-      if(strcmp(magic_number, MAGIC_NUMBER) != 0) {
+      if (strcmp(magic_number, MAGIC_NUMBER) != 0)
+      {
         printf(ERROR_INVALID_FILE, path);
         free(magic_number);
         fclose(fp);
