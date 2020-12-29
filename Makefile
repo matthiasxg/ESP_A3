@@ -5,16 +5,10 @@ ASSIGNMENT    := a3
 
 .PHONY: reset clean bin lib all run test help
 
-reset:			## resets the config files
-	@echo "[\033[36mINFO\033[0m] Resetting config files..."
-	rm -rf ./config
-	mkdir ./config
-
 clean:			## cleans up project folder
 	@echo "[\033[36mINFO\033[0m] Cleaning up folder..."
 	rm -f $(ASSIGNMENT)
 	rm -f $(ASSIGNMENT).so
-	rm -rf ./config
 	rm -rf result.json
 	rm -rf result.html
 	rm -rf ./tmp
@@ -29,7 +23,7 @@ lib:			## compiles project to shared library
 	@echo "[\033[36mINFO\033[0m] Compiling library..."
 	$(CC) $(CCFLAGS) -shared -fPIC -o $(ASSIGNMENT).so $(ASSIGNMENT).c framework.c
 
-all: clean reset bin lib	## all of the above
+all: clean bin lib	## all of the above
 
 run: all		## runs the project with default config
 	@echo "[\033[36mINFO\033[0m] Executing binary..."
@@ -55,5 +49,4 @@ help:			## prints the help text
 	@echo "Usage: make \033[36m<TARGET>\033[0m"
 	@echo "Available targets:"
 	@awk -F':.*?##' '/^[a-zA-Z_-]+:.*?##.*$$/{printf "  \033[36m%-10s\033[0m%s\n", $$1, $$2}' $(MAKEFILE_LIST)
-	
 	
