@@ -59,14 +59,17 @@ uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t c
 
 bool checkConfigFile(FILE *fp);
 
-void getGameSpecifications(FILE *fp, uint8_t *size_field, uint8_t *size_start, uint8_t *size_end,
+void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
                            unsigned int *highscore_entries);
 
 void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscores);
 
-bool fillGameMap(uint8_t **map, FILE *fp, uint8_t *size_field);
+bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
 
 void freeMap(uint8_t **map, uint8_t rows);
+
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int
+round);
 
 //-----------------------------------------------------------------------------
 ///
@@ -83,23 +86,23 @@ int main(int argc, char *argv[])
     {
       if (checkConfigFile(fp))
       {
-        uint8_t size_field[2] = {0};
-        uint8_t size_start[2] = {0};
-        uint8_t size_end[2] = {0};
+        uint8_t width = 0;
+        uint8_t height = 0;
+        uint8_t start_pipe[2] = {0};
+        uint8_t end_pipe[2] = {0};
         unsigned int highscore_entries = 0;
-        getGameSpecifications(fp, size_field, size_start, size_end, &highscore_entries);
+        getGameSpecifications(fp, &width, &height, start_pipe, end_pipe, &highscore_entries);
 
         Highscore *highscores = malloc(sizeof(Highscore) * highscore_entries);
         if (highscores)
         {
           getHighscores(fp, highscore_entries, highscores);
 
-          uint8_t **map = malloc(sizeof(uint8_t *) * size_field[1]);
-          if (map)
+          uint8_t **map = malloc(sizeof(uint8_t *) * height);
+
+          if (fillGameMap(map, fp, width, height))
           {
-            if (fillGameMap(map, fp, size_field)) {
-              printMap(map, size_field[0], size_field[1], size_start, size_end);
-            }
+            startGame(map, width, height, start_pipe, end_pipe, 1);
           }
           else
           {
@@ -139,13 +142,64 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-bool fillGameMap(uint8_t **map, FILE *fp, uint8_t *size_field)
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round)
 {
-  for (int row = 0; row < size_field[1]; row++)
+  printMap(map, width, height, start_pipe, end_pipe);
+  printf(INPUT_PROMPT, round);
+
+  char *line = getLine();
+  if (line != NULL)
   {
-    map[row] = malloc(sizeof(uint8_t) * size_field[0]);
-    if (map[row]) {
-      for (int column = 0; column < size_field[0]; column++)
+    Command cmd = NONE;
+    Direction dir = TOP;
+    uint8_t row = 0;
+    uint8_t col = 0;
+    char *result = parseCommand(line, &cmd, (size_t *) dir, &row, &col);
+
+    if (result == (char*) 1) {
+      printf("ROTATE");
+    }
+    else if (result == NULL) {
+      switch ((size_t) cmd)
+      {
+        case NONE:
+          startGame(map, width, height, start_pipe, end_pipe, round);
+          break;
+        case HELP:
+          printf(HELP_TEXT);
+          startGame(map, width, height, start_pipe, end_pipe, round);
+          break;
+        case QUIT:
+          return;
+        case RESTART:
+          break;
+      }
+    }
+    else
+    {
+      printf(ERROR_UNKNOWN_COMMAND, result);
+    }
+
+    free(line);
+  }
+  else if (line == (char*) EOF)
+  {
+    return;
+  }
+  else
+  {
+    printf(ERROR_OUT_OF_MEMORY);
+  }
+}
+
+bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height)
+{
+  for (int row = 0; row < height; row++)
+  {
+    map[row] = malloc(sizeof(uint8_t) * width);
+    if (map[row])
+    {
+      for (int column = 0; column < width; column++)
       {
         fread(&(map[row][column]), SIZE_GAMEFIELD_ENTRY, 1, fp);
       }
@@ -153,15 +207,17 @@ bool fillGameMap(uint8_t **map, FILE *fp, uint8_t *size_field)
     else
     {
       printf(ERROR_OUT_OF_MEMORY);
-      freeMap(map, size_field[1]);
+      freeMap(map, height);
       return false;
     }
   }
   return true;
 }
 
-void freeMap(uint8_t **map, uint8_t rows) {
-  for (int row = 0; row < rows; row++) {
+void freeMap(uint8_t **map, uint8_t rows)
+{
+  for (int row = 0; row < rows; row++)
+  {
     free(map[row]);
   }
   free(map);
@@ -178,17 +234,17 @@ void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscor
 }
 
 // TODO
-void getGameSpecifications(FILE *fp, uint8_t *size_field, uint8_t *size_start, uint8_t *size_end, unsigned int
-*highscore_entries)
+void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
+                           unsigned int *highscore_entries)
 {
-  fread(size_field, SIZE_FIELD_WIDTH, 1, fp);
-  fread(size_field + 1, SIZE_FIELD_HEIGHT, 1, fp);
+  fread(width, SIZE_FIELD_WIDTH, 1, fp);
+  fread(height, SIZE_FIELD_HEIGHT, 1, fp);
 
-  fread(size_start, SIZE_ROW_START, 1, fp);
-  fread(size_start + 1, SIZE_COLUMN_START, 1, fp);
+  fread(start_pipe, SIZE_ROW_START, 1, fp);
+  fread(start_pipe + 1, SIZE_COLUMN_START, 1, fp);
 
-  fread(size_end, SIZE_ROW_END, 1, fp);
-  fread(size_end + 1, SIZE_COLUMN_END, 1, fp);
+  fread(end_pipe, SIZE_ROW_END, 1, fp);
+  fread(end_pipe + 1, SIZE_COLUMN_END, 1, fp);
 
   fread(highscore_entries, SIZE_HIGHSCORE_ENTRY, 1, fp);
 }
