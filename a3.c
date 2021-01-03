@@ -47,7 +47,6 @@ typedef struct _Highscore_
   char name[SIZE_HIGHSCORE_ENTRY_NAME];
 } Highscore;
 
-
 // forward declarations
 bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
 
@@ -68,8 +67,11 @@ bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
 
 void freeMap(uint8_t **map, uint8_t rows);
 
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int
-round);
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round);
+
+void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round);
+
+bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe);
 
 //-----------------------------------------------------------------------------
 ///
@@ -102,6 +104,7 @@ int main(int argc, char *argv[])
 
           if (fillGameMap(map, fp, width, height))
           {
+            printMap(map, width, height, start_pipe, end_pipe);
             startGame(map, width, height, start_pipe, end_pipe, 1);
           }
           else
@@ -142,54 +145,95 @@ int main(int argc, char *argv[])
   return 0;
 }
 
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round)
+void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round)
 {
-  printMap(map, width, height, start_pipe, end_pipe);
   printf(INPUT_PROMPT, round);
-
   char *line = getLine();
-  if (line != NULL)
+
+  if (line == NULL)
   {
-    Command cmd = NONE;
-    Direction dir = TOP;
-    uint8_t row = 0;
-    uint8_t col = 0;
-    char *result = parseCommand(line, &cmd, (size_t *) dir, &row, &col);
-
-    if (result == (char*) 1) {
-      printf("ROTATE");
-    }
-    else if (result == NULL) {
-      switch ((size_t) cmd)
-      {
-        case NONE:
-          startGame(map, width, height, start_pipe, end_pipe, round);
-          break;
-        case HELP:
-          printf(HELP_TEXT);
-          startGame(map, width, height, start_pipe, end_pipe, round);
-          break;
-        case QUIT:
-          return;
-        case RESTART:
-          break;
-      }
-    }
-    else
-    {
-      printf(ERROR_UNKNOWN_COMMAND, result);
-    }
-
-    free(line);
+    printf(ERROR_OUT_OF_MEMORY);
   }
-  else if (line == (char*) EOF)
+  else if (line == (char *)EOF)
   {
     return;
   }
   else
   {
-    printf(ERROR_OUT_OF_MEMORY);
+    char *result = parseCommand(line, cmd, (size_t *)dir, row, col);
+    if (result == (char *)1)
+    {
+      printf(USAGE_COMMAND_ROTATE);
+      getCommand(cmd, dir, row, col, round);
+    }
+    else if (result == NULL)
+    {
+      switch ((size_t)*cmd)
+      {
+      case NONE:
+        getCommand(cmd, dir, row, col, round);
+        break;
+      case HELP:
+        printf(HELP_TEXT);
+        getCommand(cmd, dir, row, col, round);
+        break;
+      case QUIT:
+        break;
+      case RESTART:
+        // TODO
+        break;
+      }
+    }
+    else
+    {
+      printf(ERROR_UNKNOWN_COMMAND, result);
+      getCommand(cmd, dir, row, col, round);
+    }
+    free(line);
   }
+}
+
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round)
+{
+  Command cmd = NONE;
+  Direction dir = TOP;
+  uint8_t row = 0;
+  uint8_t col = 0;
+
+  getCommand(&cmd, &dir, &row, &col, round);
+  if (cmd == ROTATE)
+  {
+    if (checkRotateValues(row, col, width, height, start_pipe, end_pipe))
+    {
+      printf("Correct Values");
+    }
+    else
+    {
+      startGame(map, width, height, start_pipe, end_pipe, round);
+    }
+  }
+}
+
+bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe)
+{
+  row--;
+  col--;
+  if (row >= height || col >= width)
+  {
+    printf(USAGE_COMMAND_ROTATE);
+    return false;
+  }
+  if (row == start_pipe[0] && col == start_pipe[1])
+  {
+    printf(ERROR_ROTATE_INVALID);
+    return false;
+  }
+  if (row == end_pipe[0] && col == end_pipe[1])
+  {
+    printf(ERROR_ROTATE_INVALID);
+    return false;
+  }
+  return true;
 }
 
 bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height)
@@ -222,7 +266,6 @@ void freeMap(uint8_t **map, uint8_t rows)
   }
   free(map);
 }
-
 
 void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscores)
 {
