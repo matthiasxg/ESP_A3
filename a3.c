@@ -30,10 +30,12 @@
 #define SIZE_HIGHSCORE_ENTRY_POINTS 1
 #define SIZE_HIGHSCORE_ENTRY_NAME 3
 
-#define CHECK_TOP 64
-#define CHECK_LEFT 16
-#define CHECK_BOTTOM 4
-#define CHECK_RIGHT 1
+#define CHECK_TOP 0x80 //0b1000000
+#define CHECK_LEFT 0x20 //0b00100000
+#define CHECK_BOTTOM 0x8 //0b00001000
+#define CHECK_RIGHT 0x2 //0b00000010
+
+#define ONE_BYTE_BIT 8
 
 //strings
 #define MAGIC_NUMBER "ESPipes"
@@ -80,7 +82,15 @@ void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsign
 
 bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe);
 
-void rotatePipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col, Direction dir);
+void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir);
+
+void setBit(uint8_t *pipe, uint8_t index);
+
+uint8_t getBit(uint8_t pipe, uint8_t index);
+
+void clearBit(uint8_t *pipe, uint8_t index);
+
+void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col);
 
 //-----------------------------------------------------------------------------
 ///
@@ -203,6 +213,24 @@ void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsign
   }
 }
 
+void setBit(uint8_t *pipe, uint8_t index)
+{
+  *pipe |= (CHECK_TOP >> index);
+}
+
+void clearBit(uint8_t *pipe, uint8_t index)
+{
+  *pipe &= ~(CHECK_TOP >> index);
+}
+
+uint8_t getBit(uint8_t pipe, uint8_t index)
+{
+  int bits = sizeof(pipe) * ONE_BYTE_BIT;
+  index = (bits - (index + 1));
+  uint8_t helper = CHECK_RIGHT >> 1;
+  return ((pipe >> index) & helper);
+}
+
 void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round)
 {
   Command cmd = NONE;
@@ -213,9 +241,21 @@ void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe
   getCommand(&cmd, &dir, &row, &col, round);
   if (cmd == ROTATE)
   {
+    --row;
+    --col;
     if (checkRotateValues(row, col, width, height, start_pipe, end_pipe))
     {
-      //rotatePipe(map, width, height, row, col, dir);
+      rotatePipe(map, row, col, dir);
+      updateConnections(map, width, height, row, col);
+      printMap(map, width, height, start_pipe, end_pipe);
+      if (arePipesConnected(map, width, height, start_pipe, end_pipe))
+      {
+        printf(INFO_PUZZLE_SOLVED);
+      }
+      else
+      {
+        startGame(map, width, height, start_pipe, end_pipe, ++round);
+      }
     }
     else
     {
@@ -224,14 +264,47 @@ void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe
   }
 }
 
-// void rotatePipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col, Direction dir)
-// {
-// }
+void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir)
+{
+  uint8_t *pipe = (map[row]) + col;
+  uint8_t first_bit = 0;
+  uint8_t second_bit = 0;
+  switch (dir)
+  {
+  case LEFT:
+    first_bit = getBit(*pipe, 6);
+    second_bit = getBit(*pipe, 7);
+    *pipe >>= 2;
+    if (first_bit)
+    {
+      setBit(pipe, 0);
+    }
+    if (second_bit)
+    {
+      setBit(pipe, 1);
+    }
+    break;
+  
+  case RIGHT:
+    first_bit = getBit(*pipe, 0);
+    second_bit = getBit(*pipe, 1);
+    *pipe <<= 2;
+    if (first_bit)
+    {
+      setBit(pipe, 6);
+    }
+    if (second_bit)
+    {
+      setBit(pipe, 7);
+    }
+    break;
+  default:
+    break;
+  }
+}
 
 bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe)
 {
-  row--;
-  col--;
   if (row >= height || col >= width)
   {
     printf(USAGE_COMMAND_ROTATE);
@@ -400,17 +473,25 @@ bool shouldPipeConnectInDirection(uint8_t **map, uint8_t width, uint8_t height, 
     uint8_t adjacent_coord[2] = {0};
     if (getCoordOfAdjacentPipe(width, height, coord, adjacent_coord, dir))
     {
-      Direction adjadent_dir = TOP;
-      if (dir == TOP || dir == LEFT)
+      Direction adjacent_dir = TOP;
+      switch (dir)
       {
-        adjadent_dir += 2;
+      case TOP:
+        adjacent_dir = BOTTOM;
+        break;
+      case LEFT:
+        adjacent_dir = RIGHT;
+        break;
+      case BOTTOM:
+        adjacent_dir = TOP;
+        break;
+      case RIGHT:
+        adjacent_dir = LEFT;
+        break;
       }
-      else
+      if (isPipeOpenInDirection(map, adjacent_coord, adjacent_dir))
       {
-        adjadent_dir -= 2;
-      }
-      if (isPipeOpenInDirection(map, adjacent_coord, adjadent_dir))
-      {
+        setBit(&map[adjacent_coord[0]][adjacent_coord[1]], (2 * (adjacent_dir + 1)) - 1);
         return true;
       }
     }
@@ -479,3 +560,20 @@ uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t c
   }
   return NULL;
 }
+
+void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col)
+{
+  uint8_t coords[2] = {row, col};
+  for (Direction dir = 0; dir <= RIGHT; dir++)
+  {
+    if(shouldPipeConnectInDirection(map, width, height, coords, dir))
+    {
+      setBit(&map[row][col], (2 * (dir + 1)) - 1);
+    }
+    else
+    {
+      clearBit(&map[row][col], (2 * (dir + 1)) - 1);
+    }
+  }
+}
+
