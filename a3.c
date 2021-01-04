@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 #include "framework.h"
 
 //constants
@@ -26,6 +27,7 @@
 #define SIZE_COLUMN_END 1
 #define SIZE_HIGHSCORE_ENTRY 1
 #define SIZE_GAMEFIELD_ENTRY 1
+#define SIZE_BUFFER 300
 
 #define SIZE_HIGHSCORE_ENTRY_POINTS 1
 #define SIZE_HIGHSCORE_ENTRY_NAME 3
@@ -51,46 +53,32 @@ typedef enum _Direction_
 typedef struct _Highscore_
 {
   unsigned int score;
-  char name[SIZE_HIGHSCORE_ENTRY_NAME];
+  char name[SIZE_HIGHSCORE_ENTRY_NAME + 1];
 } Highscore;
 
 // forward declarations
 bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
-
 bool isPipeOpenInDirection(uint8_t **map, uint8_t coord[2], Direction dir);
-
 bool shouldPipeConnectInDirection(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
-
 uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
-
 bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uint8_t adjacent_coord[2], Direction dir);
-
 bool checkConfigFile(FILE *fp);
-
 void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
                            unsigned int *highscore_entries);
-
 void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscores);
-
 bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
-
 void freeMap(uint8_t **map, uint8_t rows);
-
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round);
-
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved);
 void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round);
-
 bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe);
-
 void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir);
-
 void setBit(uint8_t *pipe, uint8_t index);
-
 uint8_t getBit(uint8_t pipe, uint8_t index);
-
 void clearBit(uint8_t *pipe, uint8_t index);
-
 void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col);
+bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
+void getHighscoreName(char *name);
+void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
 
 //-----------------------------------------------------------------------------
 ///
@@ -120,12 +108,26 @@ int main(int argc, char *argv[])
           getHighscores(fp, highscore_entries, highscores);
 
           uint8_t **map = malloc(sizeof(uint8_t *) * height);
-
-          if (fillGameMap(map, fp, width, height))
-          {
-            fclose(fp);
-            printMap(map, width, height, start_pipe, end_pipe);
-            startGame(map, width, height, start_pipe, end_pipe, 1);
+          if (map) {
+            if (fillGameMap(map, fp, width, height))
+            {
+              fclose(fp);
+              printMap(map, width, height, start_pipe, end_pipe);
+              unsigned int round = 1;
+              bool solved = false;
+              startGame(map, width, height, start_pipe, end_pipe, &round, &solved);
+                if(solved) {
+                  printf(INFO_PUZZLE_SOLVED);
+                  printf(INFO_SCORE, round);
+                  handleHighscore(highscores, highscore_entries, round);
+                }
+              freeMap(map, height);
+              free(highscores);
+            }
+            else
+            {
+              printf(ERROR_OUT_OF_MEMORY);
+            }
           }
           else
           {
@@ -231,14 +233,13 @@ uint8_t getBit(uint8_t pipe, uint8_t index)
   return ((pipe >> index) & helper);
 }
 
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int round)
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved)
 {
   Command cmd = NONE;
   Direction dir = TOP;
   uint8_t row = 0;
   uint8_t col = 0;
-
-  getCommand(&cmd, &dir, &row, &col, round);
+  getCommand(&cmd, &dir, &row, &col, *round);
   if (cmd == ROTATE)
   {
     --row;
@@ -250,16 +251,17 @@ void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe
       printMap(map, width, height, start_pipe, end_pipe);
       if (arePipesConnected(map, width, height, start_pipe, end_pipe))
       {
-        printf(INFO_PUZZLE_SOLVED);
+        *solved = true;
       }
       else
       {
-        startGame(map, width, height, start_pipe, end_pipe, ++round);
+        *round = (*round) + 1;
+        startGame(map, width, height, start_pipe, end_pipe, round, solved);
       }
     }
     else
     {
-      startGame(map, width, height, start_pipe, end_pipe, round);
+      startGame(map, width, height, start_pipe, end_pipe, round, solved);
     }
   }
 }
@@ -575,5 +577,116 @@ void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row
       clearBit(&map[row][col], (2 * (dir + 1)) - 1);
     }
   }
+}
+
+bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round)
+{
+  for (size_t index = 0; index < highscore_entries; index++)
+  {
+    if (highscores[index].score < round)
+    {
+      return false;
+    }
+  }
+  return true;
+}
+
+void getHighscoreName(char *name)
+{
+  printf(INPUT_NAME);
+  char input[SIZE_BUFFER] = {0};
+  if(fgets(input, SIZE_BUFFER, stdin))
+  {
+    if(strchr(input, '\n') != NULL && strlen(input) == (SIZE_HIGHSCORE_ENTRY_NAME + 1))
+    {
+      bool alpha = true;
+      for (size_t index = 0; index < SIZE_HIGHSCORE_ENTRY_NAME; index++)
+      {
+        if(isalpha(input[index]))
+        {
+
+          name[index] = toupper(input[index]);
+        }
+        else
+        {
+          alpha = false;
+        }
+      }
+      if(!alpha)
+      {
+        printf(ERROR_NAME_ALPHABETIC);
+        getHighscoreName(name);
+      }
+    }
+    else
+    {
+      printf(ERROR_NAME_LENGTH);
+      getHighscoreName(name);
+    }
+  }
+}
+
+void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round)
+{
+  bool done = false;
+  for (size_t index = 0; index < highscore_entries; index++)
+  {
+    
+    if (highscores[index].score > round && done == false)
+    {
+      printf(INFO_BEAT_HIGHSCORE);
+      char name[SIZE_HIGHSCORE_ENTRY_NAME + 1] = {0};
+      getHighscoreName(name);
+
+      for (size_t move_index = highscore_entries - 1; move_index > index; move_index--)
+      {
+        highscores[move_index] = highscores[move_index - 1];
+      }
+
+      strcpy(highscores[index].name, name);
+      highscores[index].score = round;
+
+      done = true;
+    }
+    else if (highscores[index].score == round && done == false)
+    {
+      while (highscores[index].score == round && index < highscore_entries - 1)
+      {
+        index++;
+      }
+      if (index == highscore_entries - 1 && highscores[index].score == round)
+      {
+        break;
+      }
+      else
+      {
+        printf(INFO_BEAT_HIGHSCORE);
+        char name[SIZE_HIGHSCORE_ENTRY_NAME + 1] = {0};
+        getHighscoreName(name);
+        for (size_t move_index = highscore_entries - 1; move_index > index; move_index--)
+        {
+          highscores[move_index] = highscores[move_index - 1];
+        }
+
+        strcpy(highscores[index].name, name);
+        highscores[index].score = round;
+        done = true;
+      }
+    }
+  }
+  
+  printf(INFO_HIGHSCORE_HEADER);
+  for (size_t index = 0; index < highscore_entries; index++)
+  {
+    if (highscores[index].score == 0)
+    {
+      printf(INFO_HIGHSCORE_ENTRY, "---", 0);
+    }
+    else
+    {
+      printf(INFO_HIGHSCORE_ENTRY, highscores[index].name, highscores[index].score);
+    }
+  }
+  
 }
 
