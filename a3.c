@@ -28,10 +28,10 @@
 #define SIZE_HIGHSCORE_ENTRY 1
 #define SIZE_GAMEFIELD_ENTRY 1
 #define SIZE_BUFFER 300
-
 #define SIZE_HIGHSCORE_ENTRY_POINTS 1
 #define SIZE_HIGHSCORE_ENTRY_NAME 3
 
+//bit masks
 #define CHECK_TOP 0x80 //0b1000000
 #define CHECK_LEFT 0x20 //0b00100000
 #define CHECK_BOTTOM 0x8 //0b00001000
@@ -42,6 +42,8 @@
 //strings
 #define MAGIC_NUMBER "ESPipes"
 
+
+//enums
 typedef enum _Direction_
 {
   TOP = 0,
@@ -50,6 +52,7 @@ typedef enum _Direction_
   RIGHT = 3
 } Direction;
 
+//structs
 typedef struct _Highscore_
 {
   unsigned int score_;
@@ -76,18 +79,24 @@ void setBit(uint8_t *pipe, uint8_t index);
 uint8_t getBit(uint8_t pipe, uint8_t index);
 void clearBit(uint8_t *pipe, uint8_t index);
 void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col);
-bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
 void getHighscoreName(char *name);
 void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
 uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height);
 FILE* getFilePointer(int argc, char *argv[]);
+void printHighscore(Highscore *highscores, unsigned int highscore_entries);
 void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries);
+
 
 //-----------------------------------------------------------------------------
 ///
 /// The main program:
-/// TODO
+/// open/reads the file from given input, starts the game
+/// and handles the highscore list
+/// 
+/// @param argc must be two (adress, path)
+/// @param argv path of config
 ///
+/// @return always zero
 //
 int main(int argc, char *argv[])
 {
@@ -96,20 +105,20 @@ int main(int argc, char *argv[])
   {
     uint8_t width = 0;
     uint8_t height = 0;
-    uint8_t start_pipe[2] = {0};
-    uint8_t end_pipe[2] = {0};
+    uint8_t start[2] = {0};
+    uint8_t end[2] = {0};
     unsigned int highscore_entries = 0;
     unsigned int round = 1;
     bool solved = false;
 
-    getGameSpecifications(fp, &width, &height, start_pipe, end_pipe, &highscore_entries);
+    getGameSpecifications(fp, &width, &height, start, end, &highscore_entries);
     Highscore *highscores = getHighscores(fp, highscore_entries);
     uint8_t **map = getMap(fp, width, height);
 
     if (highscores && map)
     {
-      printMap(map, width, height, start_pipe, end_pipe);
-      startGame(map, width, height, start_pipe, end_pipe, &round, &solved);
+      printMap(map, width, height, start, end);
+      startGame(map, width, height, start, end, &round, &solved);
 
       if(solved)
       {
@@ -130,6 +139,17 @@ int main(int argc, char *argv[])
   return 0;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Opens config file, creates file pointer, checks for valid
+/// config file and returns the file pointer
+///
+/// @param argc must be two (adress, path)
+/// @param argv path of config
+///
+/// @return file pointer of the given config
+//
 FILE* getFilePointer(int argc, char *argv[])
 {
   if (--argc == COMMANDLINE_PARAMETER)
@@ -160,6 +180,17 @@ FILE* getFilePointer(int argc, char *argv[])
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Allocates storage for the map, fills the map
+///
+/// @param fp file pointer of config file
+/// @param width width of game field
+/// @param height height of game field
+///
+/// @return the filled game field
+//
 uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height)
 {
   uint8_t **map = malloc(sizeof(uint8_t *) * height);
@@ -181,6 +212,17 @@ uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height)
   } 
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Gets the command from the command line and parses it
+///
+/// @param cmd pointer of Command
+/// @param dir dir if cmd is rotate
+/// @param row row of pipe if rotate
+/// @param col col of pipe if rotate
+/// @param round game round
+//
 void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round)
 {
   printf(INPUT_PROMPT, round);
@@ -216,7 +258,6 @@ void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsign
       case QUIT:
         break;
       case RESTART:
-        // TODO
         break;
       }
     }
@@ -229,16 +270,42 @@ void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsign
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Sets a bit to 1 
+///
+/// @param pipe pipe of game field
+/// @param index index where to set bit 1
+//
 void setBit(uint8_t *pipe, uint8_t index)
 {
   *pipe |= (CHECK_TOP >> index);
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Clears one bit, so makes it zero
+///
+/// @param pipe pipe of game field
+/// @param index index where to set bit 0
+//
 void clearBit(uint8_t *pipe, uint8_t index)
 {
   *pipe &= ~(CHECK_TOP >> index);
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Returns the bit on given index
+///
+/// @param pipe pipe of game field
+/// @param index index to read bit
+///
+/// @return bit of given pipe on index
+//
 uint8_t getBit(uint8_t pipe, uint8_t index)
 {
   int bits = sizeof(pipe) * ONE_BYTE_BIT;
@@ -247,6 +314,19 @@ uint8_t getBit(uint8_t pipe, uint8_t index)
   return ((pipe >> index) & helper);
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Starts the pipe game, manages the game
+///
+/// @param map the game field
+/// @param width width of game field
+/// @param height height of game field
+/// @param start_pipe start pipe coords in game field
+/// @param end_pipe end pipe coords in game field
+/// @param round game round counter
+/// @param solved bool if game is solved
+//
 void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved)
 {
   Command cmd = NONE;
@@ -285,6 +365,16 @@ void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Rotates the pipe in given direction
+///
+/// @param map the game field
+/// @param row row of pipe to rotate
+/// @param col col of pipe to rotate
+/// @param dir to rotate
+//
 void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir)
 {
   uint8_t *pipe = (map[row]) + col;
@@ -324,6 +414,21 @@ void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir)
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Checks if the given rotations values from command line are valid
+/// For example if its the start/end pipe
+///
+/// @param row row of pipe to rotate
+/// @param col col of pipe to rotate
+/// @param width width of game field
+/// @param height height of game field
+/// @param start_pipe start pipe coords in game field
+/// @param end_pipe end pipe coords in game field
+///
+/// @return true if values are valid, else returns false
+//
 bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe)
 {
   if (row >= height || col >= width)
@@ -344,6 +449,18 @@ bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, 
   return true;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Fills the map with the values from the config file
+///
+/// @param map the game field
+/// @param fp file pointer of config file
+/// @param width width of game field
+/// @param height height of game field
+///
+/// @return true on success, else false (Out of memory)
+//
 bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height)
 {
   for (int row = 0; row < height; row++)
@@ -366,6 +483,14 @@ bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height)
   return true;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Frees the allocated memory of the map
+///
+/// @param map the game field
+/// @param rows count of rows of the game field
+//
 void freeMap(uint8_t **map, uint8_t rows)
 {
   for (int row = 0; row < rows; row++)
@@ -375,6 +500,16 @@ void freeMap(uint8_t **map, uint8_t rows)
   free(map);
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Allocates memory for highscore, fills the array with values from config
+///
+/// @param fp file pointer of config file
+/// @param highscore_entries count of highscore entries in config file
+///
+/// @return highscores array
+//
 Highscore* getHighscores(FILE *fp, unsigned int highscore_entries)
 {
   Highscore *highscores = malloc(sizeof(Highscore) * highscore_entries);
@@ -396,7 +531,18 @@ Highscore* getHighscores(FILE *fp, unsigned int highscore_entries)
   }
 }
 
-// TODO
+
+//------------------------------------------------------------------------------
+///
+/// Reads game specifications values from config value
+///
+/// @param fp file pointer of config file
+/// @param width width of game field
+/// @param height height of game field
+/// @param start_pipe start pipe coords in game field
+/// @param end_pipe end pipe coords in game field
+/// @param highscore_entries count of highscore entries in config file
+//
 void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
                            unsigned int *highscore_entries)
 {
@@ -412,7 +558,15 @@ void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *s
   fread(highscore_entries, SIZE_HIGHSCORE_ENTRY, 1, fp);
 }
 
-// TODO
+
+//------------------------------------------------------------------------------
+///
+/// Checks for the magic value in the config file
+///
+/// @param fp file pointer of config file
+///
+/// @return true if magic word is correct, else false
+//
 bool checkConfigFile(FILE *fp)
 {
   char magic_number[SIZE_MAGIC_NUMBER + 1] = {0};
@@ -424,6 +578,18 @@ bool checkConfigFile(FILE *fp)
   return true;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Checks if given direction of pipe is out of map
+///
+/// @param width width of game field
+/// @param height height of game field
+/// @param coord of pipe
+/// @param dir direction to check
+///
+/// @return true of directions is out of map, else false
+//
 bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direction dir)
 {
   switch (dir)
@@ -459,6 +625,17 @@ bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direct
   return false;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Checks if pipe is open in given direction
+///
+/// @param map the game field
+/// @param coord of pipe
+/// @param dir direction to check
+///
+/// @return true if pipe is open in dir, else false
+//
 bool isPipeOpenInDirection(uint8_t **map, uint8_t coord[2], Direction dir)
 {
   uint8_t pipe = map[coord[0]][coord[1]];
@@ -495,6 +672,19 @@ bool isPipeOpenInDirection(uint8_t **map, uint8_t coord[2], Direction dir)
   return false;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Checks if pipe should connect with another pipe in given direction
+///
+/// @param map the game field
+/// @param width width of game field
+/// @param height height of game field
+/// @param coord coordinates of pipe on game field
+/// @param dir direction to check
+///
+/// @return true if pipe should connect, else false
+//
 bool shouldPipeConnectInDirection(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir)
 {
   if (isDirectionOutOfMap(width, height, coord, dir))
@@ -532,6 +722,19 @@ bool shouldPipeConnectInDirection(uint8_t **map, uint8_t width, uint8_t height, 
   return false;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Get the coords of the adjacent pipe in given direction
+///
+/// @param width width of game field
+/// @param height height of game field
+/// @param coord coordinates of given pipe
+/// @param adjacent_coord storage for result coordinates
+/// @param dir direction to check
+///
+/// @return true if success, else false
+//
 bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uint8_t adjacent_coord[2], Direction dir)
 {
   if (!isDirectionOutOfMap(width, height, coord, dir))
@@ -566,6 +769,18 @@ bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uin
   return false;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Gets pointer of adjacent pipe in given direction
+///
+/// @param width width of game field
+/// @param height height of game field
+/// @param coord coordinates of given pipe
+/// @param dir direction to check
+///
+/// @return pointer of adjacent pipe, if not found NULL
+//
 uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir)
 {
   if (isDirectionOutOfMap(width, height, coord, dir))
@@ -594,6 +809,17 @@ uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t c
   return NULL;
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Goes through all directions and updates the connection bit
+///
+/// @param map the game field
+/// @param width width of game field
+/// @param height height of game field
+/// @param row row of pipe
+/// @param col column of pipe
+//
 void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col)
 {
   uint8_t coords[2] = {row, col};
@@ -610,18 +836,13 @@ void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row
   }
 }
 
-bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round)
-{
-  for (size_t index = 0; index < highscore_entries; index++)
-  {
-    if (highscores[index].score_ < round)
-    {
-      return false;
-    }
-  }
-  return true;
-}
 
+//------------------------------------------------------------------------------
+///
+/// If new highscore, asks user for name
+///
+/// @param name char array to storage users name
+//
 void getHighscoreName(char *name)
 {
   printf(INPUT_NAME);
@@ -657,6 +878,16 @@ void getHighscoreName(char *name)
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Iterates through the highscore list and looks if the user beat
+/// beats the highscore and updates the list
+///
+/// @param highscores list of highscores
+/// @param highscore_entries  count of highscore entries in config file
+/// @param round rounds user needed to solve the puzzle
+//
 void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round)
 {
   bool done = false;
@@ -702,6 +933,19 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
       }
     }
   }
+  printHighscore(highscores, highscore_entries);
+}
+
+
+//------------------------------------------------------------------------------
+///
+/// Prints the highscore array after updating it
+///
+/// @param highscores list of highscores
+/// @param highscore_entries  count of highscore entries in config file
+//
+void printHighscore(Highscore *highscores, unsigned int highscore_entries)
+{
   printf(INFO_HIGHSCORE_HEADER);
   for (size_t index = 0; index < highscore_entries; index++)
   {
@@ -716,6 +960,15 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
   }
 }
 
+
+//------------------------------------------------------------------------------
+///
+/// Writes the new highscore array to the config file
+///
+/// @param path path to config file
+/// @param highscores list of highscores
+/// @param highscore_entries  count of highscore entries in config file
+//
 void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries)
 {
   FILE *fp = fopen(path, "rb+");
@@ -744,4 +997,3 @@ void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_en
     printf(ERROR_OPEN_FILE, path);
   }
 }
-
