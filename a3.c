@@ -52,8 +52,8 @@ typedef enum _Direction_
 
 typedef struct _Highscore_
 {
-  unsigned int score;
-  char name[SIZE_HIGHSCORE_ENTRY_NAME + 1];
+  unsigned int score_;
+  char name_[SIZE_HIGHSCORE_ENTRY_NAME];
 } Highscore;
 
 // forward declarations
@@ -65,7 +65,7 @@ bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uin
 bool checkConfigFile(FILE *fp);
 void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
                            unsigned int *highscore_entries);
-void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscores);
+Highscore* getHighscores(FILE *fp, unsigned int highscore_entries);
 bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
 void freeMap(uint8_t **map, uint8_t rows);
 void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved);
@@ -79,6 +79,9 @@ void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row
 bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
 void getHighscoreName(char *name);
 void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
+uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height);
+FILE* getFilePointer(int argc, char *argv[]);
+void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries);
 
 //-----------------------------------------------------------------------------
 ///
@@ -88,6 +91,47 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
 //
 int main(int argc, char *argv[])
 {
+  FILE *fp = getFilePointer(argc, argv);
+  if (fp)
+  {
+    uint8_t width = 0;
+    uint8_t height = 0;
+    uint8_t start_pipe[2] = {0};
+    uint8_t end_pipe[2] = {0};
+    unsigned int highscore_entries = 0;
+    unsigned int round = 1;
+    bool solved = false;
+
+    getGameSpecifications(fp, &width, &height, start_pipe, end_pipe, &highscore_entries);
+    Highscore *highscores = getHighscores(fp, highscore_entries);
+    uint8_t **map = getMap(fp, width, height);
+
+    if (highscores && map)
+    {
+      printMap(map, width, height, start_pipe, end_pipe);
+      startGame(map, width, height, start_pipe, end_pipe, &round, &solved);
+
+      if(solved)
+      {
+        printf(INFO_PUZZLE_SOLVED);
+        printf(INFO_SCORE, round);
+        handleHighscore(highscores, highscore_entries, round);
+        writeHighscore(argv[1], highscores, highscore_entries);
+      }
+      if(round == 0)
+      {
+        main(argc, argv);
+      }
+
+      freeMap(map, height);
+      free(highscores);
+    }
+  }
+  return 0;
+}
+
+FILE* getFilePointer(int argc, char *argv[])
+{
   if (--argc == COMMANDLINE_PARAMETER)
   {
     FILE *fp = fopen(argv[1], "rb");
@@ -95,76 +139,46 @@ int main(int argc, char *argv[])
     {
       if (checkConfigFile(fp))
       {
-        uint8_t width = 0;
-        uint8_t height = 0;
-        uint8_t start_pipe[2] = {0};
-        uint8_t end_pipe[2] = {0};
-        unsigned int highscore_entries = 0;
-        getGameSpecifications(fp, &width, &height, start_pipe, end_pipe, &highscore_entries);
-
-        Highscore *highscores = malloc(sizeof(Highscore) * highscore_entries);
-        if (highscores)
-        {
-          getHighscores(fp, highscore_entries, highscores);
-
-          uint8_t **map = malloc(sizeof(uint8_t *) * height);
-          if (map) {
-            if (fillGameMap(map, fp, width, height))
-            {
-              fclose(fp);
-              printMap(map, width, height, start_pipe, end_pipe);
-              unsigned int round = 1;
-              bool solved = false;
-              startGame(map, width, height, start_pipe, end_pipe, &round, &solved);
-                if(solved) {
-                  printf(INFO_PUZZLE_SOLVED);
-                  printf(INFO_SCORE, round);
-                  handleHighscore(highscores, highscore_entries, round);
-                }
-              freeMap(map, height);
-              free(highscores);
-            }
-            else
-            {
-              printf(ERROR_OUT_OF_MEMORY);
-            }
-          }
-          else
-          {
-            printf(ERROR_OUT_OF_MEMORY);
-          }
-        }
-        else
-        {
-          printf(ERROR_OUT_OF_MEMORY);
-        }
-
-        /*
-        for (unsigned int i = 0; i < highscore_entries; i++)
-        {
-          printf("Name: %s - Score: %d\n", highscores[i].name, highscores[i].score);
-        }
-
-        printf("Field: %d - %d\n", size_field[0], size_field[1]);
-        printf("Start: %d - %d\n", size_start[0], size_start[1]);
-        printf("End: %d - %d\n", size_end[0], size_end[1]);
-        printf("Highscores: %d\n", highscore_entries);*/
+        return fp;
       }
       else
       {
         printf(ERROR_INVALID_FILE, argv[1]);
+        return NULL;
       }
     }
     else
     {
       printf(ERROR_OPEN_FILE, argv[1]);
+      return NULL;
     }
   }
   else
   {
     printf(USAGE_APPLICATION);
+    return NULL;
   }
-  return 0;
+}
+
+uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height)
+{
+  uint8_t **map = malloc(sizeof(uint8_t *) * height);
+  if (map)
+  {
+    if(fillGameMap(map, fp, width, height))
+    {
+      fclose(fp);
+      return map;
+    }
+    fclose(fp);
+    return NULL;
+  }
+  else
+  {
+    printf(ERROR_OUT_OF_MEMORY);
+    fclose(fp);
+    return NULL;
+  } 
 }
 
 void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round)
@@ -264,6 +278,11 @@ void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe
       startGame(map, width, height, start_pipe, end_pipe, round, solved);
     }
   }
+  else if (cmd == RESTART)
+  {
+    *round = 0;
+    return;
+  }
 }
 
 void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir)
@@ -356,12 +375,24 @@ void freeMap(uint8_t **map, uint8_t rows)
   free(map);
 }
 
-void getHighscores(FILE *fp, unsigned int highscore_entries, Highscore *highscores)
+Highscore* getHighscores(FILE *fp, unsigned int highscore_entries)
 {
-  for (unsigned int index = 0; index < highscore_entries; index++)
+  Highscore *highscores = malloc(sizeof(Highscore) * highscore_entries);
+  if (highscores)
   {
-    fread(&(highscores[index].score), SIZE_HIGHSCORE_ENTRY_POINTS, 1, fp);
-    fread(&(highscores[index].name), SIZE_HIGHSCORE_ENTRY_NAME, 1, fp);
+    for (unsigned int index = 0; index < highscore_entries; index++)
+    {
+      highscores[index].score_ = 0;
+      strcpy(highscores[index].name_, "---");
+      fread(&(highscores[index].score_), SIZE_HIGHSCORE_ENTRY_POINTS, 1, fp);
+      fread(&(highscores[index].name_), SIZE_HIGHSCORE_ENTRY_NAME, 1, fp);
+    }
+    return highscores;
+  }
+  else
+  {
+    printf(ERROR_OUT_OF_MEMORY);
+    return NULL;
   }
 }
 
@@ -583,7 +614,7 @@ bool checkHighscore(Highscore *highscores, unsigned int highscore_entries, unsig
 {
   for (size_t index = 0; index < highscore_entries; index++)
   {
-    if (highscores[index].score < round)
+    if (highscores[index].score_ < round)
     {
       return false;
     }
@@ -631,8 +662,7 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
   bool done = false;
   for (size_t index = 0; index < highscore_entries; index++)
   {
-    
-    if (highscores[index].score > round && done == false)
+    if (highscores[index].score_ > round && done == false)
     {
       printf(INFO_BEAT_HIGHSCORE);
       char name[SIZE_HIGHSCORE_ENTRY_NAME + 1] = {0};
@@ -642,19 +672,17 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
       {
         highscores[move_index] = highscores[move_index - 1];
       }
-
-      strcpy(highscores[index].name, name);
-      highscores[index].score = round;
-
+      strcpy(highscores[index].name_, name);
+      highscores[index].score_ = round;
       done = true;
     }
-    else if (highscores[index].score == round && done == false)
+    else if (highscores[index].score_ == round && done == false)
     {
-      while (highscores[index].score == round && index < highscore_entries - 1)
+      while (highscores[index].score_ == round && index < highscore_entries - 1)
       {
         index++;
       }
-      if (index == highscore_entries - 1 && highscores[index].score == round)
+      if (index == highscore_entries - 1 && highscores[index].score_ == round)
       {
         break;
       }
@@ -668,25 +696,52 @@ void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsi
           highscores[move_index] = highscores[move_index - 1];
         }
 
-        strcpy(highscores[index].name, name);
-        highscores[index].score = round;
+        strcpy(highscores[index].name_, name);
+        highscores[index].score_ = round;
         done = true;
       }
     }
   }
-  
   printf(INFO_HIGHSCORE_HEADER);
   for (size_t index = 0; index < highscore_entries; index++)
   {
-    if (highscores[index].score == 0)
+    if (highscores[index].score_ == 0)
     {
       printf(INFO_HIGHSCORE_ENTRY, "---", 0);
     }
     else
     {
-      printf(INFO_HIGHSCORE_ENTRY, highscores[index].name, highscores[index].score);
+      printf(INFO_HIGHSCORE_ENTRY, highscores[index].name_, highscores[index].score_);
     }
   }
-  
+}
+
+void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries)
+{
+  FILE *fp = fopen(path, "rb+");
+  if (fp)
+  {
+    if (checkConfigFile(fp))
+    {
+      int bytes_to_highscore = SIZE_FIELD_HEIGHT + SIZE_FIELD_WIDTH + SIZE_ROW_START + 
+                               SIZE_COLUMN_START + SIZE_ROW_END + SIZE_COLUMN_END + SIZE_HIGHSCORE_ENTRY;
+                              
+      fseek(fp, bytes_to_highscore, SEEK_CUR);
+      for (size_t index = 0; index < highscore_entries; index++)
+      {
+        fwrite(&(highscores[index].score_), SIZE_HIGHSCORE_ENTRY_POINTS, 1, fp);
+        fwrite(&(highscores[index].name_), SIZE_HIGHSCORE_ENTRY_NAME, 1, fp);
+      }
+      fclose(fp);
+    }
+    else
+    {
+      printf(ERROR_INVALID_FILE, path);
+    }
+  }
+  else
+  {
+    printf(ERROR_OPEN_FILE, path);
+  }
 }
 
