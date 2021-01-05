@@ -90,22 +90,6 @@ void printHighscore(Highscore *highscores, unsigned int highscore_entries);
 void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries);
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 //---------------------------------------------------------------------------------------------------------------------
 ///
 /// The main program:
