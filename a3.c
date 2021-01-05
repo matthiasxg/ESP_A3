@@ -60,34 +60,53 @@ typedef struct _Highscore_
 } Highscore;
 
 // forward declarations
+FILE* getFilePointer(int argc, char *argv[]);
+bool checkConfigFile(FILE *fp);
+void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
+                           unsigned int *highscore_entries);
+uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height);
+bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
+void freeMap(uint8_t **map, uint8_t rows);
+void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round);
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe,
+               unsigned int *round, bool *solved);
+void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir);
+bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, 
+                       uint8_t *end_pipe);
+void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col);
 bool isDirectionOutOfMap(uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
 bool isPipeOpenInDirection(uint8_t **map, uint8_t coord[2], Direction dir);
 bool shouldPipeConnectInDirection(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
 uint8_t *getAdjacentPipe(uint8_t **map, uint8_t width, uint8_t height, uint8_t coord[2], Direction dir);
-bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uint8_t adjacent_coord[2], Direction dir);
-bool checkConfigFile(FILE *fp);
-void getGameSpecifications(FILE *fp, uint8_t *width, uint8_t *height, uint8_t *start_pipe, uint8_t *end_pipe,
-                           unsigned int *highscore_entries);
-Highscore* getHighscores(FILE *fp, unsigned int highscore_entries);
-bool fillGameMap(uint8_t **map, FILE *fp, uint8_t width, uint8_t height);
-void freeMap(uint8_t **map, uint8_t rows);
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved);
-void getCommand(Command *cmd, Direction *dir, uint8_t *row, uint8_t *col, unsigned int round);
-bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe);
-void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir);
+bool getCoordOfAdjacentPipe(uint8_t width, uint8_t height, uint8_t coord[2], uint8_t adjacent_coord[2], 
+                            Direction dir);
 void setBit(uint8_t *pipe, uint8_t index);
 uint8_t getBit(uint8_t pipe, uint8_t index);
 void clearBit(uint8_t *pipe, uint8_t index);
-void updateConnections(uint8_t **map, uint8_t width, uint8_t height, uint8_t row, uint8_t col);
-void getHighscoreName(char *name);
 void handleHighscore(Highscore *highscores, unsigned int highscore_entries, unsigned int round);
-uint8_t** getMap(FILE *fp, uint8_t width, uint8_t height);
-FILE* getFilePointer(int argc, char *argv[]);
+Highscore* getHighscores(FILE *fp, unsigned int highscore_entries);
+void getHighscoreName(char *name);
 void printHighscore(Highscore *highscores, unsigned int highscore_entries);
 void writeHighscore(char *path, Highscore *highscores, unsigned int highscore_entries);
 
 
-//-----------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//---------------------------------------------------------------------------------------------------------------------
 ///
 /// The main program:
 /// open/reads the file from given input, starts the game
@@ -327,7 +346,8 @@ uint8_t getBit(uint8_t pipe, uint8_t index)
 /// @param round game round counter
 /// @param solved bool if game is solved
 //
-void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe, unsigned int *round, bool *solved)
+void startGame(uint8_t **map, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe,
+               unsigned int *round, bool *solved)
 {
   Command cmd = NONE;
   Direction dir = TOP;
@@ -429,7 +449,8 @@ void rotatePipe(uint8_t **map, uint8_t row, uint8_t col, Direction dir)
 ///
 /// @return true if values are valid, else returns false
 //
-bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe, uint8_t *end_pipe)
+bool checkRotateValues(uint8_t row, uint8_t col, uint8_t width, uint8_t height, uint8_t *start_pipe,
+                       uint8_t *end_pipe)
 {
   if (row >= height || col >= width)
   {
