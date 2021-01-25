@@ -1,0 +1,15 @@
+Dem Programm wird ein Binary File (wie bei Ass3) als Parameter mitgegeben.
+
+Das erste Byte in diesem File gibt an, wie viele Werte im File enthalten sind.
+
+Es wird nun gemäß diesem ersten Byte die jeweilige Menge an Speicher am Heap allokiert um sämtliche Werte dort reinspeichern zu können.
+
+Nachdem alle Werte am Heap liegen werden die letzten 2 Byte wie folgt bearbeitet:
+
+1. Setze beim vorletzten Byte das 2. Bit von Rechts auf 0
+
+2. Shifte das letzte Byte um 1 nach Rechts
+
+Gib den Content aus und speichere die geänderten Bytes zurück ins File!
+
+Viel Glück! :)
