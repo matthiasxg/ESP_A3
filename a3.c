@@ -1,7 +1,7 @@
 //-----------------------------------------------------------------------------
 // a3.c
 //
-// Pipe-minigame, rotate the pipes to reach the goal
+// Pipe-minigame, rotate the pipes to reach the goal!
 //
 // Group: 9
 //
